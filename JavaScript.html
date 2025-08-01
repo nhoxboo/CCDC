@@ -1,0 +1,349 @@
+<script>
+    // Global state
+    let ALL_TOOLS = [];
+    let ALL_EMPLOYEES = [];
+
+    // --- INITIALIZATION & THEME ---
+    document.addEventListener("DOMContentLoaded", function() {
+        if (localStorage.getItem('theme') === 'dark') document.body.classList.add('dark-mode');
+        loadInitialData();
+    });
+
+    function toggleTheme() {
+        document.body.classList.toggle('dark-mode');
+        localStorage.setItem('theme', document.body.classList.contains('dark-mode') ? 'dark' : 'light');
+    }
+
+    function loadInitialData() {
+        showLoading("Đang tải dữ liệu hệ thống...");
+        google.script.run
+            .withSuccessHandler(data => {
+                ALL_TOOLS = data.tools || [];
+                ALL_EMPLOYEES = data.employees || [];
+                loadPage(null, 'dashboard');
+            })
+            .withFailureHandler(error => {
+                showError("Không thể tải dữ liệu ban đầu. Lỗi: " + error.message);
+            })
+            .getInitialData();
+    }
+
+    // --- UTILITY & ROUTING ---
+    function showLoading(message = "Đang xử lý...") { document.getElementById('main-content').innerHTML = `<article aria-busy="true">${message}</article>`; }
+    function showError(message) { document.getElementById('main-content').innerHTML = `<article><h3><i class="fa-solid fa-circle-exclamation"></i> Lỗi</h3><p>${message}</p><button onclick="loadInitialData()">Thử lại</button></article>`; }
+
+    function loadPage(event, pageName) {
+        if (event) event.preventDefault();
+        showLoading("Đang tải trang...");
+        // Dùng setTimeout để đảm bảo "Loading" kịp hiển thị trước khi có lỗi
+        setTimeout(() => {
+            try {
+                switch (pageName) {
+                    case 'dashboard': loadDashboard(); break;
+                    case 'issue': loadIssueForm(); break;
+                    case 'return': loadReturnForm(); break;
+                    case 'report': loadReportPage(); break;
+                    default: showError("Trang không tồn tại.");
+                }
+            } catch (e) {
+                showError("Gặp lỗi khi hiển thị trang: " + e.message + ". Vui lòng kiểm tra lại dữ liệu trong Google Sheets.");
+            }
+        }, 50);
+    }
+
+    // --- DASHBOARD PAGE (FIXED) ---
+    function loadDashboard() {
+        const toolsData = ALL_TOOLS.slice(1);
+        if (toolsData.length === 0) {
+            document.getElementById('main-content').innerHTML = `<h2><i class="fa-solid fa-chart-pie"></i> Dashboard Tồn Kho</h2><article>Chưa có dữ liệu công cụ dụng cụ. Vui lòng thêm CCDC vào sheet <strong>DanhMuc_CCDC</strong>.</article>`;
+            return;
+        }
+        const content = `
+            <h2><i class="fa-solid fa-chart-pie"></i> Dashboard Tồn Kho</h2>
+            <div class="dashboard-grid">
+                ${toolsData.map(tool => `
+                    <article class="tool-card">
+                        <h5>${tool[1] || 'N/A'} (${tool[0] || 'N/A'})</h5>
+                        <p>ĐVT: ${tool[2] || 'N/A'}</p>
+                        <p class="stock">${tool[3] || 0}</p>
+                        <span>Số lượng trong kho</span>
+                    </article>
+                `).join('')}
+            </div>`;
+        document.getElementById('main-content').innerHTML = content;
+    }
+
+    // --- MULTI-ISSUE PAGE (UI Improved) ---
+    function loadIssueForm() {
+        let content = `
+        <article>
+            <h2><i class="fa-solid fa-arrow-up-from-bracket"></i> Phiếu Xuất Kho (Nhiều mục)</h2>
+            <form id="issue-form" onsubmit="handleIssueSubmit(event)">
+                <label for="issue-employee">Nhân viên</label>
+                <select id="issue-employee" required>
+                    <option value="" disabled selected>Chọn nhân viên...</option>
+                    ${ALL_EMPLOYEES.slice(1).map(emp => `<option value="${emp[0]}">${emp[1]} (${emp[0]})</option>`).join('')}
+                </select>
+                <hr>
+                <div id="issue-items-container"></div>
+                <button type="button" class="secondary icon-button" onclick="addIssueItemRow()"><i class="fa-solid fa-plus"></i> Thêm CCDC</button>
+                <hr>
+                <button type="submit" id="issue-submit-btn" class="icon-button"><i class="fa-solid fa-check"></i> Xác nhận Xuất kho</button>
+            </form>
+        </article>`;
+        document.getElementById('main-content').innerHTML = content;
+        addIssueItemRow();
+    }
+
+    function addIssueItemRow() {
+        const container = document.getElementById('issue-items-container');
+        const itemRow = document.createElement('div');
+        itemRow.className = 'item-row';
+        itemRow.innerHTML = `
+            <div>
+                <label>Công cụ dụng cụ</label>
+                <select class="issue-tool-select" required>
+                    <option value="" disabled selected>Chọn CCDC...</option>
+                    ${ALL_TOOLS.slice(1).map(tool => `<option value="${tool[0]}" ${tool[3] <= 0 ? 'disabled' : ''}>${tool[1]} (Tồn: ${tool[3]})</option>`).join('')}
+                </select>
+            </div>
+            <div>
+                <label>Số lượng</label>
+                <input type="number" class="issue-quantity-input" min="1" required>
+            </div>
+            <button type="button" class="delete-btn" onclick="this.parentElement.remove()"><i class="fa-solid fa-trash-can"></i></button>
+        `;
+        container.appendChild(itemRow);
+    }
+    
+    // --- MULTI-RETURN PAGE (FIXED) ---
+    function loadReturnForm() {
+        const content = `
+         <article>
+             <h2><i class="fa-solid fa-arrow-down-to-bracket"></i> Phiếu Nhập Kho (Trả CCDC)</h2>
+             <label for="return-employee">Chọn tên bạn để xem CCDC đang mượn</label>
+             <select id="return-employee" onchange="findBorrowedItems()">
+                <option value="" disabled selected>Chọn nhân viên...</option>
+                ${ALL_EMPLOYEES.slice(1).map(emp => `<option value="${emp[0]}">${emp[1]} (${emp[0]})</option>`).join('')}
+             </select>
+             <form id="return-form" onsubmit="handleReturnSubmit(event)">
+                <div id="borrowed-list" style="margin-top: 1.5em;"></div>
+             </form>
+         </article>`;
+        document.getElementById('main-content').innerHTML = content;
+    }
+
+    function findBorrowedItems() {
+        const employeeId = document.getElementById('return-employee').value;
+        const listDiv = document.getElementById('borrowed-list');
+        listDiv.innerHTML = '<div aria-busy="true">Đang tìm...</div>';
+
+        google.script.run
+            .withSuccessHandler(items => {
+                if (!items || items.length === 0) {
+                    listDiv.innerHTML = '<blockquote>Nhân viên này không có CCDC nào đang mượn.</blockquote>';
+                    return;
+                }
+                const table = `
+                    <h4>Chọn các CCDC muốn trả</h4>
+                    <table><thead><tr><th><input type="checkbox" onclick="toggleAllReturnCheckboxes(this)"></th><th>Tên CCDC</th><th>Số lượng mượn</th></tr></thead>
+                    <tbody>
+                        ${items.map(item => `
+                            <tr class="return-item-row">
+                                <td><input type="checkbox" class="return-checkbox" 
+                                    data-transaction-id="${item[0]}" data-tool-id="${item[4]}" 
+                                    data-tool-name="${item[5]}" data-quantity="${item[6]}"></td>
+                                <td>${item[5]} (${item[4]})</td>
+                                <td>${item[6]}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody></table>
+                    <button type="submit" class="icon-button"><i class="fa-solid fa-check"></i> Trả các mục đã chọn</button>`;
+                listDiv.innerHTML = table;
+            })
+            .withFailureHandler(error => showError(error.message))
+            .getBorrowedItemsByEmployeeId(employeeId);
+    }
+
+    // --- REPORT PAGE (FIXED) ---
+    function loadReportPage() {
+        showLoading("Đang tải báo cáo...");
+        google.script.run
+            .withSuccessHandler(data => {
+                if (!data || data.length <= 1) {
+                    document.getElementById('main-content').innerHTML = `<h2><i class="fa-solid fa-file-alt"></i> Báo cáo Xuất Nhập Tồn</h2><article>Chưa có giao dịch nào được ghi nhận.</article>`;
+                    return;
+                }
+                const headers = data[0];
+                const transactions = data.slice(1).reverse();
+                const content = `
+                    <h2><i class="fa-solid fa-file-alt"></i> Báo cáo Xuất Nhập Tồn</h2>
+                    <figure>
+                    <table role="grid">
+                        <thead>
+                            <tr>${headers.map(h => `<th scope="col">${h}</th>`).join('')}</tr>
+                        </thead>
+                        <tbody>
+                            ${transactions.map(row => `
+                                <tr>${row.map((cell, index) => `<td>${(index === 1) ? new Date(cell).toLocaleString('vi-VN') : cell}</td>`).join('')}</tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                    </figure>
+                `;
+                document.getElementById('main-content').innerHTML = content;
+            })
+            .withFailureHandler(error => showError("Lỗi tải báo cáo: " + error.message))
+            .getTransactions();
+    }
+    
+    // --- Các hàm xử lý form (handle...Submit) không cần thay đổi ---
+    // (Copy y nguyên từ phiên bản trước)
+      function handleIssueSubmit(event) {
+        event.preventDefault();
+        const submitBtn = document.getElementById("issue-submit-btn");
+        
+        const employeeId = document.getElementById('issue-employee').value;
+        // Kiểm tra xem đã chọn nhân viên chưa
+        if (!employeeId) {
+            alert("Vui lòng chọn một nhân viên.");
+            return;
+        }
+
+        submitBtn.setAttribute("aria-busy", "true");
+        submitBtn.disabled = true;
+
+        const items = [];
+        document.querySelectorAll('.item-row').forEach(row => {
+            const toolId = row.querySelector('.issue-tool-select').value;
+            const quantity = parseInt(row.querySelector('.issue-quantity-input').value);
+            if (toolId && quantity > 0) {
+                items.push({ toolId, quantity });
+            }
+        });
+
+        if (items.length === 0) {
+            alert("Vui lòng thêm ít nhất một công cụ dụng cụ.");
+            submitBtn.setAttribute("aria-busy", "false");
+            submitBtn.disabled = false;
+            return;
+        }
+
+        const data = {
+            employeeId: employeeId,
+            items: items
+        };
+
+        google.script.run.withSuccessHandler(response => {
+            alert(response.message);
+            submitBtn.setAttribute("aria-busy", "false");
+            submitBtn.disabled = false;
+            if (response.success) loadInitialData();
+        }).withFailureHandler(error => {
+            alert("Đã xảy ra lỗi: " + error.message);
+            submitBtn.setAttribute("aria-busy", "false");
+            submitBtn.disabled = false;
+        }).issueMultipleTools(data);
+    }
+  function handleIssueSubmit(event) {
+        event.preventDefault();
+        const submitBtn = document.getElementById("issue-submit-btn");
+        
+        const employeeId = document.getElementById('issue-employee').value;
+        // Kiểm tra xem đã chọn nhân viên chưa
+        if (!employeeId) {
+            alert("Vui lòng chọn một nhân viên.");
+            return;
+        }
+
+        submitBtn.setAttribute("aria-busy", "true");
+        submitBtn.disabled = true;
+
+        const items = [];
+        document.querySelectorAll('.item-row').forEach(row => {
+            const toolId = row.querySelector('.issue-tool-select').value;
+            const quantity = parseInt(row.querySelector('.issue-quantity-input').value);
+            if (toolId && quantity > 0) {
+                items.push({ toolId, quantity });
+            }
+        });
+
+        if (items.length === 0) {
+            alert("Vui lòng thêm ít nhất một công cụ dụng cụ.");
+            submitBtn.setAttribute("aria-busy", "false");
+            submitBtn.disabled = false;
+            return;
+        }
+
+        const data = {
+            employeeId: employeeId,
+            items: items
+        };
+
+        google.script.run.withSuccessHandler(response => {
+            alert(response.message);
+            submitBtn.setAttribute("aria-busy", "false");
+            submitBtn.disabled = false;
+            if (response.success) loadInitialData();
+        }).withFailureHandler(error => {
+            alert("Đã xảy ra lỗi: " + error.message);
+            submitBtn.setAttribute("aria-busy", "false");
+            submitBtn.disabled = false;
+        }).issueMultipleTools(data);
+    }
+function handleReturnSubmit(event) {
+        event.preventDefault();
+        const itemsToReturn = [];
+        document.querySelectorAll('.return-checkbox:checked').forEach(cb => {
+            itemsToReturn.push({
+                transactionId: cb.dataset.transactionId,
+                toolId: cb.dataset.toolId,
+                toolName: cb.dataset.toolName,
+                quantity: cb.dataset.quantity
+            });
+        });
+
+        if (itemsToReturn.length === 0) {
+            alert("Vui lòng chọn ít nhất một mục để trả.");
+            return;
+        }
+
+        if (!confirm(`Bạn có chắc muốn trả ${itemsToReturn.length} mục đã chọn?`)) return;
+
+        showLoading("Đang xử lý nhập kho...");
+        google.script.run.withSuccessHandler(response => {
+            alert(response.message);
+            if (response.success) loadInitialData();
+            else showError(response.message);
+        }).returnMultipleTools({ itemsToReturn });
+    }
+
+    // --- REPORT PAGE ---
+    function loadReportPage() {
+        showLoading("Đang tải báo cáo...");
+        google.script.run.withSuccessHandler(data => {
+            if (data.length <= 1) {
+                document.getElementById('main-content').innerHTML = `<h2><i class="fa-solid fa-file-alt"></i> Báo cáo Xuất Nhập Tồn</h2><article>Chưa có giao dịch nào được ghi nhận.</article>`;
+                return;
+            }
+            const headers = data[0];
+            const transactions = data.slice(1).reverse(); // Hiển thị giao dịch mới nhất lên đầu
+            const content = `
+                <h2><i class="fa-solid fa-file-alt"></i> Báo cáo Xuất Nhập Tồn</h2>
+                <figure>
+                <table>
+                    <thead>
+                        <tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>
+                    </thead>
+                    <tbody>
+                        ${transactions.map(row => `
+                            <tr>${row.map((cell, index) => `<td>${(cell instanceof Date || index === 1) ? new Date(cell).toLocaleString('vi-VN') : cell}</td>`).join('')}</tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                </figure>
+            `;
+            document.getElementById('main-content').innerHTML = content;
+        }).withFailureHandler(showError).getTransactions();
+    }
+</script>

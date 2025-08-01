@@ -1,0 +1,59 @@
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<style>
+    :root {
+        --bg-color: #f8f9fa;
+        --card-bg-color: #ffffff;
+        --text-color: #212529;
+        --border-color: #dee2e6;
+        --input-bg-color: #ffffff;
+        --primary-accent: #007bff;
+        --danger-color: #dc3545;
+    }
+
+    body.dark-mode {
+        --bg-color: #1a1a1a;
+        --card-bg-color: #2c2c2c;
+        --text-color: #f0f0f0;
+        --border-color: #495057;
+        --input-bg-color: #383838; /* Màu nền ô input trong dark mode */
+        --primary-accent: #0d6efd;
+        --pico-primary-inverse: var(--card-bg-color);
+    }
+    
+    body {
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        transition: background-color 0.3s, color 0.3s;
+    }
+
+    /* FIX: Áp dụng màu nền và màu chữ cho các ô nhập liệu */
+    input, select, textarea {
+        background-color: var(--input-bg-color) !important;
+        color: var(--text-color) !important;
+        border-color: var(--border-color) !important;
+    }
+
+    nav, header { background-color: var(--bg-color) !important; }
+    main { padding-top: 1rem; }
+    
+    article, .card {
+        background-color: var(--card-bg-color);
+        border: 1px solid var(--border-color);
+        border-radius: var(--pico-border-radius);
+        padding: 1.5rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    .icon-button { display: flex; align-items: center; gap: 0.5rem; }
+    .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; }
+    .tool-card h5 { margin-bottom: 0.5rem; color: var(--primary-accent); }
+    .tool-card .stock { font-size: 2rem; font-weight: bold; }
+    .item-row { display: grid; grid-template-columns: 1fr 120px auto; gap: 1rem; align-items: flex-end; margin-bottom: 1rem; }
+    .item-row label { margin-bottom: 0.5rem; display: block; }
+    .item-row select, .item-row input { margin-bottom: 0; }
+    .delete-btn { background: transparent !important; border-color: transparent !important; color: var(--danger-color) !important; padding: 0.75rem !important; box-shadow: none !important; }
+    .delete-btn:hover { background: var(--border-color) !important; }
+    #theme-switcher { cursor: pointer; background: none; border: none; color: var(--text-color); font-size: 1.2rem; }
+</style>

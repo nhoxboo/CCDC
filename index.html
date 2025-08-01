@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <base target="_top">
+    <?!= include('CSS'); ?>
+</head>
+<body>
+    <header class="container">
+        <nav>
+            <ul>
+                <li><strong><i class="fa-solid fa-screwdriver-wrench"></i> Quản lý CCDC</strong></li>
+            </ul>
+            <ul>
+                <li><a href="#" role="button" class="contrast" onclick="loadPage(event, 'dashboard')"><i class="fa-solid fa-chart-pie"></i> Dashboard</a></li>
+                <li><a href="#" role="button" onclick="loadPage(event, 'issue')"><i class="fa-solid fa-arrow-up-from-bracket"></i> Xuất Kho</a></li>
+                <li><a href="#" role="button" onclick="loadPage(event, 'return')"><i class="fa-solid fa-arrow-down-to-bracket"></i> Nhập Kho</a></li>
+                <li><a href="#" role="button" onclick="loadPage(event, 'report')"><i class="fa-solid fa-file-alt"></i> Báo Cáo</a></li>
+                <li>
+                    <button id="theme-switcher" onclick="toggleTheme()">
+                        <i class="fa-solid fa-circle-half-stroke"></i>
+                    </button>
+                </li>
+            </ul>
+        </nav>
+    </header>
+
+    <main id="main-content" class="container">
+        <article aria-busy="true">Đang tải dữ liệu...</article>
+    </main>
+
+    <?!= include('JavaScript'); ?>
+</body>
+</html>
